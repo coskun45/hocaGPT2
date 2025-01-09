@@ -20,7 +20,7 @@ load_dotenv()
 def get_vectordb():
     vectorstore = Chroma( 
     embedding_function = OpenAIEmbeddings(model="text-embedding-3-large"),
-    collection_name="asrin-getirdigi-tereddutler", 
+    collection_name="fikih", 
     persist_directory="./.chromadb",
     collection_metadata={"embeeding_model":"text-embedding-3-large",
     "chunk_size":1024,
