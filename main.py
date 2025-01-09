@@ -184,4 +184,4 @@ demo.launch(auth_message="""
         </p>
         <p>"🚀 A chatbot powered by Coskun"</>
     </div>
-    """, auth=("admin","pass1234"))
+    """, auth=("admin","pass1234"), server_port=7860)
