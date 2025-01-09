@@ -182,6 +182,6 @@ demo.launch(auth_message="""
         <p style="font-size: 14px; color: #7F8C8D;">
             Bunu kabul ediyorsanız lütfen kullanıcı adı ve şifrenizi giriniz.
         </p>
-        <p>"🚀 A chatbot powered by Coskun"</>
+        <p>🚀 A chatbot powered by Coskun</>
     </div>
     """, auth=("admin","pass1234"), server_port=10000)
