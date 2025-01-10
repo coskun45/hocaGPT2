@@ -2,3 +2,4 @@
 .env
 /venv
 /vektorisierte_PDF
+/.chromadb2
