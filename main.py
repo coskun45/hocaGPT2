@@ -14,24 +14,46 @@ from langchain.schema import AIMessage, HumanMessage
 import gradio as gr
 import re
 import json
+import chromadb
 from datetime import datetime
 load_dotenv()
+embedding_function = OpenAIEmbeddings(model="text-embedding-3-large")
 
-def get_vectordb():
-    vectorstore = Chroma( 
-    embedding_function = OpenAIEmbeddings(model="text-embedding-3-large"),
-    collection_name="fikih", 
-    persist_directory="./.chromadb",
-    collection_metadata={"embeeding_model":"text-embedding-3-large",
-    "chunk_size":1024,
-    "chunk_overlap":100})
-    return vectorstore
+def get_chroma_client(path):
+    return  chromadb.PersistentClient(path)
+    
 
-def get_context(query: str, vectorstore) ->list:
-    results = vectorstore.similarity_search_with_score(
-    query, k=3)
-    return results
+def get_context(query: str, client, k) ->list:
+    collection_list = client.list_collections()
+    ergebnisse=[]
+    query_vek = embedding_function.embed_query(query)
+    for col_name in collection_list:
+        name=col_name.name
+        col = client.get_collection(name=name)
+        res = col.query(query_vek,n_results=3)
+        ergebnisse.append(res)
+        extract_infos = extract_info_from_vektordb(ergebnisse)
+    return extract_infos[:k]
 
+def extract_info_from_vektordb(ergebnisse):
+    result = []
+    for e in ergebnisse:
+        distances = e['distances'][0]
+        
+        indices = [idx for idx, value in enumerate(distances) if value < 1]
+        if len(indices)>0:
+            for idx in indices:
+                item = { }
+                
+                item["ids"] = e['ids'][0][idx]
+                item["distances"] = e['distances'][0][idx]
+                item["metadatas"] = e['metadatas'][0][idx]
+                item["documents"] = e['documents'][0][idx]
+                
+                
+                result.append(item)
+    return sorted(result, key=lambda x: x["distances"])
+    
 
 def generate_response(query: str, retrieved_docs):
     llm = ChatOpenAI(model="gpt-4o-mini",temperature=0) 
@@ -70,7 +92,7 @@ def is_meaningful_input(user_input: str) -> bool:
 def create_context(result):
     contexts =""
     for r in result:
-        contexts +=r[0].page_content
+        contexts +=r['documents']
     return contexts
 
 def create_source_infos(retrieved_docs):
@@ -80,8 +102,8 @@ def create_source_infos(retrieved_docs):
 }
     source_list = []
     for r in retrieved_docs:
-        source_infos['source']= (r[0].metadata['source'].split('/')[-1])
-        source_infos['page'] = r[0].metadata['page']
+        source_infos['source']= (r["metadatas"]['source'].split('/')[-1])
+        source_infos['page'] = r["metadatas"]["page"]
         source_list.append(source_infos.copy())
     return source_list
 
@@ -106,10 +128,10 @@ def document_to_dict(documents):
     for doc in documents:
         doc_dict ={ "id": None, "metadata": None, "page_content": None,"relevance_score": None}
         
-        doc_dict['id']=doc[0].id
-        doc_dict['metadata']=doc[0].page_content
-        doc_dict['page_content']=doc[0].metadata
-        doc_dict['relevance_score']=doc[1]
+        doc_dict['id']=doc['ids']
+        doc_dict['metadata']=doc['metadatas']
+        doc_dict['page_content']=doc['documents']
+        doc_dict['relevance_score']=doc['distances']
         dict_list.append(doc_dict)
     return dict_list
 counter = 1
@@ -141,18 +163,15 @@ def predict(message, history):
     history ={}
     print(history_langchain_format)
     for msg in history:
-        print("hier")
         if msg['role'] == "user":
-            print("user")
             history_langchain_format.append(HumanMessage(content=msg['content']))
         elif msg['role'] == "assistant":
-            print("assistant")
             history_langchain_format.append(AIMessage(content=msg['content']))
     print(history_langchain_format)
     if is_meaningful_input(message):
         history_langchain_format.append(HumanMessage(content=message))
-        retrieved_docs = get_context(message, get_vectordb())
-        if retrieved_docs[0][1]>1:
+        retrieved_docs = get_context(message, get_chroma_client("vectorDB"),k=3)
+        if retrieved_docs[0]['distances']>1:
             return "Sormus oldugunuz soru HocaGPT nin kapsami disinda oldugundan cevap veremiyorum. Lütfen konu ile ilgili bir soru sormayi deneyin."
         else:
             context = create_context(retrieved_docs)
@@ -160,8 +179,12 @@ def predict(message, history):
             source_infos = create_source_infos(retrieved_docs)
             history_langchain_format.append(AIMessage(content=gpt_response['response']))
             response = format_response(gpt_response['response'], source_infos)
-            print(history_langchain_format)
             save_chat_history(retrieved_docs, gpt_response['response'], message)
+            print("SORU: ", message)
+            print("************************************")
+            print("CONTEXT: ", context)
+            print("************************************")
+            print("RESPONSE: ", gpt_response['response'])
             return response
     else:
         return "Lütfen anlamlı bir soru sorunuz."

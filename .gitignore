@@ -3,3 +3,8 @@
 /venv
 /vektorisierte_PDF
 /.chromadb2
+/.chromadb
+/.klein_chromaDB
+/vektorisierte_PDF_fur_grossDB
+/vektorisierte_PDF_fur_kleinDB
+/vektorisierte_PDF_fur_vectorDB
